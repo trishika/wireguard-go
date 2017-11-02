@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"wireguard"
 )
 
 func printUsage() {
@@ -46,7 +47,7 @@ func main() {
 	// daemonize the process
 
 	if !foreground {
-		err := Daemonize()
+		err := wireguard.Daemonize()
 		if err != nil {
 			log.Println("Failed to daemonize:", err)
 		}
@@ -59,7 +60,7 @@ func main() {
 
 	// open TUN device
 
-	tun, err := CreateTUN(interfaceName)
+	tun, err := wireguard.CreateTUN(interfaceName)
 	if err != nil {
 		log.Println("Failed to create tun device:", err)
 		return
@@ -70,26 +71,26 @@ func main() {
 	logLevel := func() int {
 		switch os.Getenv("LOG_LEVEL") {
 		case "debug":
-			return LogLevelDebug
+			return wireguard.LogLevelDebug
 		case "info":
-			return LogLevelInfo
+			return wireguard.LogLevelInfo
 		case "error":
-			return LogLevelError
+			return wireguard.LogLevelError
 		}
-		return LogLevelInfo
+		return wireguard.LogLevelInfo
 	}()
 
 	// create wireguard device
 
-	device := NewDevice(tun, logLevel)
+	device := wireguard.NewDevice(tun, logLevel)
 
-	logInfo := device.log.Info
-	logError := device.log.Error
+	logInfo := device.Log.Info
+	logError := device.Log.Error
 	logInfo.Println("Starting device")
 
 	// start configuration lister
 
-	uapi, err := NewUAPIListener(interfaceName)
+	uapi, err := wireguard.NewUAPIListener(interfaceName)
 	if err != nil {
 		logError.Fatal("UAPI listen error:", err)
 	}
@@ -105,7 +106,7 @@ func main() {
 				errs <- err
 				return
 			}
-			go ipcHandle(device, conn)
+			go wireguard.IpcHandle(device, conn)
 		}
 	}()
 
