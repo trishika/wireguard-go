@@ -24,13 +24,30 @@ func (s *IPCError) ErrorCode() int64 {
 }
 
 func ipcGetOperation(device *Device, socket *bufio.ReadWriter) *IPCError {
+	lines := make([]string, 0, 100)
+	GetOperation(device, lines)
+
+	// send lines
+
+	for _, line := range lines {
+		_, err := socket.WriteString(line + "\n")
+		if err != nil {
+			return &IPCError{
+				Code: ipcErrorIO,
+			}
+		}
+	}
+
+	return nil
+}
+
+func GetOperation(device *Device, lines []string) {
 
 	// create lines
 
 	device.mutex.RLock()
 	device.net.mutex.RLock()
 
-	lines := make([]string, 0, 100)
 	send := func(line string) {
 		lines = append(lines, line)
 	}
@@ -76,23 +93,14 @@ func ipcGetOperation(device *Device, socket *bufio.ReadWriter) *IPCError {
 
 	device.net.mutex.RUnlock()
 	device.mutex.RUnlock()
-
-	// send lines
-
-	for _, line := range lines {
-		_, err := socket.WriteString(line + "\n")
-		if err != nil {
-			return &IPCError{
-				Code: ipcErrorIO,
-			}
-		}
-	}
-
-	return nil
 }
 
 func ipcSetOperation(device *Device, socket *bufio.ReadWriter) *IPCError {
 	scanner := bufio.NewScanner(socket)
+	return SetOperation(device, scanner)
+}
+
+func SetOperation(device *Device, scanner *bufio.Scanner) *IPCError {
 	logInfo := device.Log.Info
 	logError := device.Log.Error
 	logDebug := device.Log.Debug

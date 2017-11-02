@@ -1,3 +1,5 @@
+// +build !android
+
 package wireguard
 
 /* Implementation of the TUN device interface for linux

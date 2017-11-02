@@ -141,53 +141,60 @@ func (device *Device) RoutineReadFromTUN() {
 
 	for {
 
-		// read packet
-
-		elem.packet = elem.buffer[MessageTransportHeaderSize:]
-		size, err := device.tun.device.Read(elem.packet)
-		if err != nil {
-			logError.Println("Failed to read packet from TUN device:", err)
-			device.Close()
+		select {
+		case <-device.signal.stop:
+			logDebug.Println("Routine, TUN Reader worker, stopped")
 			return
-		}
-
-		if size == 0 || size > MaxContentSize {
-			continue
-		}
-
-		elem.packet = elem.packet[:size]
-
-		// lookup peer
-
-		var peer *Peer
-		switch elem.packet[0] >> 4 {
-		case ipv4.Version:
-			if len(elem.packet) < ipv4.HeaderLen {
-				continue
-			}
-			dst := elem.packet[IPv4offsetDst : IPv4offsetDst+net.IPv4len]
-			peer = device.routingTable.LookupIPv4(dst)
-
-		case ipv6.Version:
-			if len(elem.packet) < ipv6.HeaderLen {
-				continue
-			}
-			dst := elem.packet[IPv6offsetDst : IPv6offsetDst+net.IPv6len]
-			peer = device.routingTable.LookupIPv6(dst)
 
 		default:
-			logDebug.Println("Receieved packet with unknown IP version")
+			// read packet
+
+			elem.packet = elem.buffer[MessageTransportHeaderSize:]
+			size, err := device.tun.device.Read(elem.packet)
+			if err != nil {
+				logError.Println("Failed to read packet from TUN device:", err)
+				device.Close()
+				return
+			}
+
+			if size == 0 || size > MaxContentSize {
+				continue
+			}
+
+			elem.packet = elem.packet[:size]
+
+			// lookup peer
+
+			var peer *Peer
+			switch elem.packet[0] >> 4 {
+			case ipv4.Version:
+				if len(elem.packet) < ipv4.HeaderLen {
+					continue
+				}
+				dst := elem.packet[IPv4offsetDst : IPv4offsetDst+net.IPv4len]
+				peer = device.routingTable.LookupIPv4(dst)
+
+			case ipv6.Version:
+				if len(elem.packet) < ipv6.HeaderLen {
+					continue
+				}
+				dst := elem.packet[IPv6offsetDst : IPv6offsetDst+net.IPv6len]
+				peer = device.routingTable.LookupIPv6(dst)
+
+			default:
+				logDebug.Println("Receieved packet with unknown IP version")
+			}
+
+			if peer == nil {
+				continue
+			}
+
+			// insert into nonce/pre-handshake queue
+
+			signalSend(peer.signal.handshakeReset)
+			addToOutboundQueue(peer.queue.nonce, elem)
+			elem = device.NewOutboundElement()
 		}
-
-		if peer == nil {
-			continue
-		}
-
-		// insert into nonce/pre-handshake queue
-
-		signalSend(peer.signal.handshakeReset)
-		addToOutboundQueue(peer.queue.nonce, elem)
-		elem = device.NewOutboundElement()
 	}
 }
 

@@ -87,3 +87,19 @@ func closeUDPConn(device *Device) {
 	netc.mutex.Unlock()
 	signalSend(device.signal.newUDPConn)
 }
+
+func GetUDPConn(device *Device) (uintptr, error) {
+	netc := &device.net
+	netc.mutex.Lock()
+	defer netc.mutex.Unlock()
+
+	if netc.conn == nil {
+        return 0, nil
+    }
+
+    file, err := netc.conn.File()
+    if err != nil {
+        return 0, err
+    }
+    return file.Fd(), nil
+}
